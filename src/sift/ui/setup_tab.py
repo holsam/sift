@@ -25,6 +25,9 @@ from PySide6.QtWidgets import (
 # -- Import internal configuration classes --
 from sift.config import AppConfig, Destination, Filters
 
+# -- Import internal scanner function --
+from sift.scanner import scan
+
 # -- SetupTab: class to define the structure of the setup tab panels
 class SetupTab(QWidget):
     config_changed = Signal()
@@ -158,13 +161,12 @@ class SetupTab(QWidget):
 
     # _refresh_count: refresh file count
     def _refresh_count(self) -> None:
-        pass
-        # files = scan(
-        #     [Path(p) for p in self.config.source_paths],
-        #     recursive=self.config.recursive,
-        #     extensions=self.config.filters.normalised(),
-        # )
-        # self.count_label.setText(f'Files matched: {len(files)}')
+        files = scan(
+            [Path(p) for p in self.config.source_paths],
+            recursive=self.config.recursive,
+            extensions=self.config.filters.normalised(),
+        )
+        self.count_label.setText(f'Files matched: {len(files)}')
 
     # _append_row: add a row to the destinations table
     def _append_row(self, key: str, path: str) -> None:
