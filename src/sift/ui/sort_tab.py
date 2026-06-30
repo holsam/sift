@@ -20,7 +20,7 @@ from sift.config import AppConfig
 from sift.session import MoveRecord, Session
 
 # -- Import internal functions --
-from sift.mover import move_file
+from sift.mover import move_file, undo_move
 from sift.scanner import scan
 
 # -- human_size: convert a file size into a human-readable string --
@@ -82,9 +82,15 @@ class SortTab(QWidget):
         self.buttons_layout = QGridLayout(self.buttons_box)
         layout.addWidget(self.buttons_box)
 
+        action_row = QHBoxLayout()
         skip_btn = QPushButton('Skip')
         skip_btn.clicked.connect(self.skip_current)
-        layout.addWidget(skip_btn)
+        self.undo_btn = QPushButton('Undo last move')
+        self.undo_btn.clicked.connect(self.undo_last)
+        self.undo_btn.setEnabled(False)
+        action_row.addWidget(skip_btn)
+        action_row.addWidget(self.undo_btn)
+        layout.addLayout(action_row)
 
         # Set up session history panel
         console_box = QGroupBox('Session History')
@@ -145,11 +151,21 @@ class SortTab(QWidget):
         self.session.skip()
         self._refresh()
 
+    # undo_last: undo last file move
+    def undo_last(self) -> None:
+        if not self.session or self.session.last_move is None:
+            return
+        record = self.session.last_move
+        undo_move(record.final, record.original)
+        self.session.restore(record)
+        self._refresh()
+
     # _refresh: refresh Sort tab
     def _refresh(self) -> None:
         if not self.session:
             return
         self.summary_label.setText(f'Sorted {self.session.sorted_count} of {self.session.total} ({self.session.remaining} left)')
+        self.undo_btn.setEnabled(self.session is not None and self.session.last_move is not None)
         self.console.setPlainText('\n'.join(self.session.history))
         self.console.verticalScrollBar().setValue(
             self.console.verticalScrollBar().maximum()
