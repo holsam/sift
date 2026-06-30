@@ -17,9 +17,10 @@ from PySide6.QtWidgets import (
 
 # -- Import internal classes --
 from sift.config import AppConfig
-from sift.session import Session
+from sift.session import MoveRecord, Session
 
-# -- Import internal scanning function --
+# -- Import internal functions --
+from sift.mover import move_file
 from sift.scanner import scan
 
 # -- human_size: convert a file size into a human-readable string --
@@ -125,7 +126,17 @@ class SortTab(QWidget):
 
     # sort_current: move current file
     def sort_current(self, dest) -> None:
-        raise NotImplementedError
+        if not self.session:
+            return
+        current = self.session.current()
+        if current is None:
+            return
+        original = current
+        final = move_file(current, Path(dest.path))
+        self.session.record_move(
+            MoveRecord(original=original, final=final, key=dest.key)
+        )
+        self._refresh()
 
     # skip_current: skip current file
     def skip_current(self) -> None:
