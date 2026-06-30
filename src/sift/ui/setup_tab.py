@@ -28,7 +28,7 @@ from sift.config import AppConfig, Destination, Filters
 # -- Import internal scanner function --
 from sift.scanner import scan
 
-# -- SetupTab: class to define the structure of the setup tab panels
+# -- SetupTab: class to define the structure of the setup tab panels --
 class SetupTab(QWidget):
     config_changed = Signal()
     # Initialise QWidget
@@ -40,6 +40,7 @@ class SetupTab(QWidget):
         root.addWidget(self._build_lower_panel(), stretch=1)
         self._load_from_config()
         self._refresh_count()
+
     # _build_upper_panel: construct the upper panel of setup tab (source selection and filtering)
     def _build_upper_panel(self) -> QWidget:
         box = QGroupBox('Source Files and Filters')
