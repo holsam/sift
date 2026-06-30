@@ -23,6 +23,9 @@ from sift.session import MoveRecord, Session
 from sift.mover import move_file, undo_move
 from sift.scanner import scan
 
+# -- Import internal UI components --
+from sift.ui.preview import PreviewWidget
+
 # -- human_size: convert a file size into a human-readable string --
 def human_size(num: int) -> str:
     size = float(num)
@@ -41,11 +44,7 @@ class SortTab(QWidget):
         self.session: Session | None = None
         root = QHBoxLayout(self)
         left = self._build_left_column()
-        # Add placeholder for preview panel
-        self.preview = QGroupBox('Preview')
-        QVBoxLayout(self.preview).addWidget(
-            QLabel('Preview appears here', alignment=Qt.AlignmentFlag.AlignCenter)
-        )
+        self.preview = PreviewWidget()       
         root.addWidget(left, stretch=1)
         root.addWidget(self.preview, stretch=2)
 
@@ -172,9 +171,10 @@ class SortTab(QWidget):
         )
         current = self.session.current()
         if current is None:
-            self.name_label.setText('All done.')
+            self.name_label.setText('All done')
             self.size_label.setText('—')
             self.dir_label.setText('—')
+            self.preview.show_message('Session complete')
             return
         self.name_label.setText(f'<b>{current.name}</b>')
         try:
@@ -182,3 +182,4 @@ class SortTab(QWidget):
         except OSError:
             self.size_label.setText('size unavailable')
         self.dir_label.setText(str(current.parent))
+        self.preview.show_file(current)
