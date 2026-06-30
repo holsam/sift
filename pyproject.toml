@@ -1,6 +1,6 @@
 [project]
 name = "sift"
-version = "0.1.0"
+version = "0.2.0"
 description = "An interactive file sorter GUI"
 readme = "README.md"
 authors = [
