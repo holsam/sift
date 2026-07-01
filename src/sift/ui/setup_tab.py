@@ -3,12 +3,14 @@ Sift UI: setup tab
 '''
 
 # -- Import external dependencies --
+from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QCheckBox,
+    QDateEdit,
     QFileDialog,
+    QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -16,6 +18,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QPushButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -65,11 +68,51 @@ class SetupTab(QWidget):
         left.addWidget(self.source_list, stretch=1)
         # RHS: filters
         right = QVBoxLayout()
-        right.addWidget(QLabel('Extensions (comma separated, blank = all):'))
+        form = QFormLayout()
+        # Add file extenstion filters
         self.ext_input = QLineEdit()
         self.ext_input.setPlaceholderText('jpg, png, mp4')
         self.ext_input.editingFinished.connect(self._on_filter_changed)
-        right.addWidget(self.ext_input)
+        form.addRow('Filter for file extensions (blank = all):', self.ext_input)
+        # Add file name glob filters
+        self.glob_input = QLineEdit()
+        self.glob_input.setPlaceholderText('*pattern*')
+        self.glob_input.editingFinished.connect(self._on_filter_changed)
+        form.addRow('Filter for file names matching glob:', self.glob_input)
+        # Add file name glob filters
+        self.regex_input = QLineEdit()
+        self.regex_input.setPlaceholderText(r"\d{4}-\d{2}-\d{2}")
+        self.regex_input.editingFinished.connect(self._on_filter_changed)
+        form.addRow('Filters for files matching regex:', self.regex_input)
+        # Add size filters
+        self.min_size = QSpinBox()
+        self.min_size.setRange(0, 1_000_000)
+        self.min_size.setSuffix(' MB')
+        self.min_size.valueChanged.connect(self._on_filter_changed)
+        form.addRow('Filter for minimum file size:', self.min_size)
+        self.max_size = QSpinBox()
+        self.max_size.setRange(0, 1_000_000)   # 0 = no maximum
+        self.max_size.setSuffix(' MB')
+        self.max_size.setSpecialValueText('none')
+        self.max_size.valueChanged.connect(self._on_filter_changed)
+        form.addRow('Filter for maximum file size:', self.max_size)
+        # Add date filters
+        self.date_before = QDateEdit()
+        self.date_before.setCalendarPopup(True)
+        self.date_before.setSpecialValueText('none')
+        self.date_before.setMinimumDate(QDate(2000, 1, 1))
+        self.date_before.setDate(self.date_before.minimumDate())
+        self.date_before.dateChanged.connect(self._on_filter_changed)
+        form.addRow('Filter for files modified before:', self.date_before)
+        self.date_after = QDateEdit()
+        self.date_after.setCalendarPopup(True)
+        self.date_after.setSpecialValueText('none')
+        self.date_after.setMinimumDate(QDate(2000, 1, 1))
+        self.date_after.setDate(self.date_after.minimumDate())
+        self.date_after.dateChanged.connect(self._on_filter_changed)
+        form.addRow('Filter for files modified after:', self.date_after)
+        # Add form of filters to RHS and add count
+        right.addLayout(form)
         self.count_label = QLabel('Files matched: 0')
         self.count_label.setStyleSheet('font-size: 18px; font-weight: 600;')
         right.addWidget(self.count_label)
@@ -108,7 +151,18 @@ class SetupTab(QWidget):
 
     # _load_from_config: load setup tab from configuration file
     def _load_from_config(self) -> None:
-        self.ext_input.setText(', '.join(self.config.filters.extensions))
+        f = self.config.filters
+        self.ext_input.setText(', '.join(f.extensions))
+        self.glob_input.setText(f.name_glob or '')
+        self.regex_input.setText(f.name_regex or '')
+        if f.min_size:
+            self.min_size.setValue(f.min_size // 1_000_000)
+        if f.max_size:
+            self.max_size.setValue(f.max_size // 1_000_000)
+        if f.modified_after:
+            self.date_after.setDate(QDate(f.modified_after.date()))
+        if f.modified_before:
+            self.date_before.setDate(QDate(f.modified_before.date()))
         for src in self.config.source_paths:
             self.source_list.addItem(src)
         self.table.blockSignals(True)
@@ -155,8 +209,29 @@ class SetupTab(QWidget):
 
     # _on_filter_changed: apply filter logic
     def _on_filter_changed(self) -> None:
-        raw = [p.strip() for p in self.ext_input.text().split(',')]
-        self.config.filters = Filters(extensions=[p for p in raw if p])
+        raw = [p.strip() for p in self.ext_input.text().split(",")]
+        min_mb = self.min_size.value()
+        max_mb = self.max_size.value()
+        after = self.date_after.date()
+        before = self.date_before.date()
+        floor = self.date_after.minimumDate()
+        self.config.filters = Filters(
+            extensions=[p for p in raw if p],
+            name_glob=self.glob_input.text().strip() or None,
+            name_regex=self.regex_input.text().strip() or None,
+            min_size=min_mb * 1_000_000 if min_mb else None,
+            max_size=max_mb * 1_000_000 if max_mb else None,
+            modified_after=(
+                datetime(after.year(), after.month(), after.day())
+                if after != floor
+                else None
+            ),
+            modified_before=(
+                datetime(before.year(), before.month(), before.day(), 23, 59, 59)
+                if before != floor
+                else None
+            ),
+        )
         self._persist()
         self._refresh_count()
 
@@ -165,7 +240,7 @@ class SetupTab(QWidget):
         files = scan(
             [Path(p) for p in self.config.source_paths],
             recursive=self.config.recursive,
-            extensions=self.config.filters.normalised(),
+            filters=self.config.filters,
         )
         self.count_label.setText(f'Files matched: {len(files)}')
 
