@@ -3,10 +3,13 @@ Sift: session history
 '''
 
 # -- Import external dependencies --
-import random
+import random, tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+# -- DELETED_KEY: variable holding the key for deleted files --
+DELETED_KEY = 'deleted'
 
 # -- MoveRecord: dataclass holding information needed to describe and reverse a file move --
 @dataclass
@@ -14,6 +17,15 @@ class MoveRecord:
     original: Path  # original file path
     final: Path  # post-move/rename file path
     key: str  # destination key used
+    colour: str | None = None
+
+# -- LogLine: dataclass holding information about a history console entry --
+@dataclass
+class LogLine:
+    stamp: str
+    body: str
+    key: str = ''
+    colour: str | None = None
 
 # -- Session: dataclass holding the working queue, counts, history and the last move --
 @dataclass
@@ -22,14 +34,16 @@ class Session:
     rng: random.Random = field(default_factory=random.Random)
     total: int = 0
     sorted_count: int = 0
-    history: list[str] = field(default_factory=list)
+    history: list[LogLine] = field(default_factory=list)
     last_move: MoveRecord | None = None
+    trash_dir: Path = field(default=Path)
     _queue: list[Path] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self._queue = list(self.files)
         self.rng.shuffle(self._queue)
         self.total = len(self._queue)
+        self.trash_dir = Path(tempfile.mkdtemp(prefix='sift-trash-'))
 
     @property
     def remaining(self) -> int:
@@ -38,9 +52,10 @@ class Session:
     def current(self) -> Path | None:
         return self._queue[0] if self._queue else None
 
-    def log(self, message: str) -> None:
+    # log: add an entry to the history console 
+    def log(self, body: str, key: str = '', colour: str | None = None) -> None:
         stamp = datetime.now().strftime('%H:%M:%S')
-        self.history.append(f'[{stamp}] {message}')
+        self.history.append(LogLine(stamp, body, key, colour))
 
     # record_move: pop the current file out of queue, count it and remember information for potential undo
     def record_move(self, record: MoveRecord) -> None:
@@ -48,7 +63,15 @@ class Session:
             self._queue.pop(0)
         self.sorted_count += 1
         self.last_move = record
-        self.log(f'moved "{record.original.name}" → {record.key}')
+        self.log(f'moved "{record.original.name}" → ', record.key, record.colour)
+
+    # record_delete: pop the current file out of queue, count it and move to Sift trash directory
+    def record_delete(self, record: MoveRecord) -> None:
+        if self._queue:
+            self._queue.pop(0)
+        self.sorted_count += 1
+        self.last_move = record
+        self.log(f'deleted "{record.original.name}" → ', 'Trash', '#b04a4a')
 
     # skip: send the current file to a random spot further down the queue
     def skip(self) -> None:
