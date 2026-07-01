@@ -20,7 +20,7 @@ from sift.config import AppConfig
 from sift.session import MoveRecord, Session
 
 # -- Import internal functions --
-from sift.mover import move_file, undo_move
+from sift.mover import flush_session_trash, move_file, undo_move
 from sift.scanner import scan
 
 # -- Import internal UI components --
@@ -47,24 +47,26 @@ class SortTab(QWidget):
         self.preview = PreviewWidget()       
         root.addWidget(left, stretch=1)
         root.addWidget(self.preview, stretch=2)
+        self._set_session_enabled(False)
 
     
     # _build_left_column: construct the left column panel (summary, file information, destinations, history)
     def _build_left_column(self) -> QWidget:
         col = QWidget()
         layout = QVBoxLayout(col)
+        self._session_widgets: list[QWidget] = []
         # Set up summary box panel
         summary_box = QGroupBox('Session Summary')
         sl = QVBoxLayout(summary_box)
         self.start_btn = QPushButton('Start session')
-        self.start_btn.clicked.connect(self.start_session)
-        self.summary_label = QLabel('No session running.')
+        self.start_btn.clicked.connect(self.toggle_session)
+        self.summary_label = QLabel('No session running')
         sl.addWidget(self.start_btn)
         sl.addWidget(self.summary_label)
         layout.addWidget(summary_box)
-
         # Set up current file info panel
-        info_box = QGroupBox('Current File')
+        self.info_box = QGroupBox('Current File')
+        info_box = self.info_box
         il = QVBoxLayout(info_box)
         self.name_label = QLabel('—')
         self.name_label.setWordWrap(True)
@@ -75,22 +77,22 @@ class SortTab(QWidget):
         il.addWidget(self.size_label)
         il.addWidget(self.dir_label)
         layout.addWidget(info_box)
-
         # Set up destination buttons panel
         self.buttons_box = QGroupBox('Move To')
         self.buttons_layout = QGridLayout(self.buttons_box)
         layout.addWidget(self.buttons_box)
-
+        # Set up action row
         action_row = QHBoxLayout()
-        skip_btn = QPushButton('Skip')
-        skip_btn.clicked.connect(self.skip_current)
-        self.undo_btn = QPushButton('Undo last move')
+        self.skip_btn = QPushButton('Skip')
+        self.skip_btn.clicked.connect(self.skip_current)
+        self.undo_btn = QPushButton('Undo')
         self.undo_btn.clicked.connect(self.undo_last)
         self.undo_btn.setEnabled(False)
-        action_row.addWidget(skip_btn)
+        action_row.addWidget(self.skip_btn)
         action_row.addWidget(self.undo_btn)
         layout.addLayout(action_row)
-
+        self._session_widgets.append(self.skip_btn)
+        self._session_widgets.append(self.undo_btn)
         # Set up session history panel
         console_box = QGroupBox('Session History')
         cl = QVBoxLayout(console_box)
@@ -98,23 +100,52 @@ class SortTab(QWidget):
         self.console.setReadOnly(True)
         cl.addWidget(self.console)
         layout.addWidget(console_box, stretch=1)
-
         return col
+    
+    # toggle_session: toggles between starting and stopping a session as required
+    def toggle_session(self) -> None:
+        if self.session is None:
+            self.start_session()
+        else:
+            self.stop_session()
 
     # start_session: start a session by scanning for files, clearing history, and constructing destination buttons
     def start_session(self) -> None:
         files = scan(
             [Path(p) for p in self.config.source_paths],
             recursive=self.config.recursive,
-            extensions=self.config.filters.normalised(),
+            filters=self.config.filters,
         )
         if not files:
-            self.summary_label.setText('No files matched. Check the Setup tab.')
+            self.summary_label.setText("No files matched. Check the Setup tab.")
             return
         self.session = Session(files=files)
         self.console.clear()
         self._rebuild_destination_buttons()
+        self.start_btn.setText("Stop session")
+        self._set_session_enabled(True)
+        self.setFocus()   # so key shortcuts reach the tab, not a button
         self._refresh()
+
+    # stop_session: end a session by deleting any deleted files and resetting the UI
+    def stop_session(self) -> None:
+        if self.session is not None:
+            flush_session_trash(self.session.trash_dir)
+        self.session = None
+        self.start_btn.setText("Start session")
+        self._set_session_enabled(False)
+        self.summary_label.setText("No session running.")
+        self.name_label.setText("—")
+        self.size_label.setText("—")
+        self.dir_label.setText("—")
+        self.preview.show_message("No session running.")
+
+    # _set_session_enabled: enables UI components if session is started
+    def _set_session_enabled(self, on: bool) -> None:
+        self.buttons_box.setEnabled(on)
+        self.info_box.setEnabled(on)
+        for w in self._session_widgets:
+            w.setEnabled(on)
 
     # _rebuild_destination_buttons: create destination directory buttons
     def _rebuild_destination_buttons(self) -> None:
