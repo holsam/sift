@@ -4,6 +4,7 @@ Sift UI: sort tab
 # -- Import external dependencies --
 from pathlib import Path
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QGridLayout,
     QGroupBox,
@@ -22,9 +23,11 @@ from sift.session import DELETED_KEY, MoveRecord, Session
 # -- Import internal functions --
 from sift.mover import delete_to_session_trash, flush_session_trash, move_file, undo_move
 from sift.scanner import scan
+from sift.shortcuts import resolve_shortcuts
 
 # -- Import internal UI components --
 from sift.ui.utils.preview import PreviewWidget
+from sift.ui.utils.shortcut_button import ShortcutButton
 
 # -- human_size: convert a file size into a human-readable string --
 def human_size(num: int) -> str:
@@ -153,16 +156,35 @@ class SortTab(QWidget):
 
     # _rebuild_destination_buttons: create destination directory buttons
     def _rebuild_destination_buttons(self) -> None:
-        # Clear any existing buttons.
         while self.buttons_layout.count():
             item = self.buttons_layout.takeAt(0)
             w = item.widget()
             if w:
                 w.deleteLater()
+        self._shortcuts = resolve_shortcuts(self.config.destinations)
+        self._shortcut_to_dest = {}
         for i, dest in enumerate(self.config.destinations):
-            btn = QPushButton(f'{i + 1}. {dest.key}')
+            letter = self._shortcuts.get(i)
+            text, underline = self._button_label(dest.key, letter)
+            btn = ShortcutButton(text, underline)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)   # keep keys on the tab
+            if dest.colour:
+                btn.setStyleSheet(f'ShortcutButton {{ color: {dest.colour}; }}')
             btn.clicked.connect(lambda _=False, d=dest: self.sort_current(d))
             self.buttons_layout.addWidget(btn, i // 2, i % 2)
+            if letter:
+                self._shortcut_to_dest[letter] = dest
+
+    # _button_label: returns the keyboard shorcut key and the letter to underline
+    @staticmethod
+    def _button_label(key: str, letter: str | None) -> tuple[str, int]:
+        if not letter:
+            return key, -1
+        low = key.lower()
+        if letter in low:
+            return key, low.index(letter)
+        text = f'{key} ({letter})'
+        return text, text.lower().index(letter, len(key))
 
     # sort_current: move current file
     def sort_current(self, dest) -> None:
@@ -231,3 +253,33 @@ class SortTab(QWidget):
             self.size_label.setText('size unavailable')
         self.dir_label.setText(str(current.parent))
         self.preview.show_file(current)
+
+    # keyPressEvent: handler for all keyboard shortcuts
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if not self.session:
+            super().keyPressEvent(event)
+            return
+        key = event.key()
+        mods = event.modifiers()
+        # Register destination keyboard shortcuts
+        text = event.text().lower()
+        if text and text in getattr(self, '_shortcut_to_dest', {}):
+            self.sort_current(self._shortcut_to_dest[text])
+            return
+        # Register skip keyboard shortcut
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.skip_current()
+            return
+        # Register delete keyboard shortcut
+        if key == Qt.Key.Key_Backspace:
+            self.delete_current()
+            return
+        # Register undo keyboard shortcut
+        if key == Qt.Key.Key_Z and mods & Qt.KeyboardModifier.ControlModifier:
+            self.undo_last()
+            return
+        super().keyPressEvent(event)
+
+    # keyReleaseEvent: handler for key being released
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        super().keyReleaseEvent(event)
