@@ -4,6 +4,7 @@ Sift: configuration management and handling
 
 # -- Import external dependencies --
 import yaml
+from datetime import datetime
 from pathlib import Path
 from platformdirs import user_config_path
 from pydantic import BaseModel, Field
@@ -16,11 +17,19 @@ CONFIG_FILE = CONFIG_DIR / 'config.yaml'
 class Destination(BaseModel):
     key: str
     path: str
+    shortcut: str | None = None   # optional: single letter key for keyboard shortcut
+    colour: str | None = None   # optional: hex code for terminal colour
 
 
 # -- Filters: class which holds file selection filters --
 class Filters(BaseModel):
     extensions: list[str] = Field(default_factory=list)
+    name_glob: str | None = None   # optional: glob pattern to match names against
+    name_regex: str | None = None   # optional: regex pattern to match names against
+    min_size: int | None = None   # optional: minimum size in bytes
+    max_size: int | None = None   # optional: maximum size in bytes
+    modified_before: datetime | None = None   # optional: only accept files modified before this date/time
+    modified_after: datetime | None = None   # optional: only accept files modified after this date/time
 
     # Filters.normalised: returns a set of lowercase extensions all beginning with a dot
     def normalised(self) -> set[str]:
@@ -51,5 +60,5 @@ class AppConfig(BaseModel):
     # AppConfig.save: save an AppConfig class to a given file
     def save(self, path: Path = CONFIG_FILE) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = self.model_dump()
+        data = self.model_dump(mode='json')
         path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True), encoding='utf-8')
