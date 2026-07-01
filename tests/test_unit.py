@@ -8,10 +8,10 @@ from pathlib import Path
 
 # -- Import internal classes and functions for testing --
 from sift.config import AppConfig, Destination, Filters
-from sift.mover import move_file, undo_move, unique_target
+from sift.mover import delete_to_session_trash, flush_session_trash, move_file, paths_overlap, undo_move, unique_target
 from sift.scanner import scan
 from sift.session import MoveRecord, Session
-
+from sift.shortcuts import resolve_shortcuts
 
 # -- TestConfig: class defining unit tests for configuration handling --
 class TestConfig:
@@ -41,6 +41,7 @@ class TestConfig:
         f = Filters(extensions=['jpg', '.PNG', '  Mp4 '])
         assert f.normalised() == {'.jpg', '.png', '.mp4'}
 
+
 # -- TestMove: class defining unit tests for move
 class TestMove:
     # test_unique_target_on_clash: tests that a file which has the same filename as an existing file is renamed to a unique filename
@@ -65,6 +66,29 @@ class TestMove:
         assert orig_filepath.read_text() == 'x'
         assert not moved.exists()
 
+    # test_overlap: test that directories which are the same or contain one another are flagged as overlapping
+    def test_overlap(self) -> None:
+        assert paths_overlap(Path('/a/b'), Path('/a/b'))
+        assert paths_overlap(Path("/a"), Path("/a/b"))
+        assert paths_overlap(Path("/a/b"), Path("/a"))
+        assert not paths_overlap(Path("/a/b"), Path("/a/c"))
+
+    # test_delete_then_flush: test that a file moved to Sift trash directory is deleted and directory is flushed
+    def test_delete_then_flush(self, tmp_path: Path) -> None:
+        src = tmp_path / "src"
+        trash = tmp_path / "trash"
+        src.mkdir()
+        f = src / "x.txt"
+        f.write_text("hi")
+
+        moved = delete_to_session_trash(f, trash)
+        assert moved.exists()
+        assert not f.exists()
+
+        flush_session_trash(trash)  # sends to OS trash, removes holding folder
+        assert not trash.exists()
+
+
 # -- TestScan: class defining unit tests for file scanning --
 class TestScan:
     # test_recursive: test file scanning in recursive mode scans subdirectories
@@ -81,7 +105,8 @@ class TestScan:
 
     # test_filter: tests than scan filters by file extensions
     def test_filter(self, source_files) -> None:
-        results = scan([source_files], recursive=True, extensions={'.jpg', '.png'})
+        filters = Filters(extensions=['.jpg', '.png'])
+        results = scan([source_files], recursive=True, filters=filters)
         assert len(results) == 2
         assert {p.name for p in results} == {'a.jpg', 'b.png'}
 
@@ -92,6 +117,7 @@ class TestScan:
         dup.write_text('x', encoding='utf-8')
         files = scan([source_files, tmp_path / 'a.jpg'], recursive=False)
         assert len(files) == 1
+
 
 # -- TestSession: class defining unit tests for session information --
 class TestSession:
@@ -121,3 +147,27 @@ class TestSession:
         assert s.sorted_count == 0
         assert s.current() == cur
         assert s.last_move is None
+
+
+# -- TestShortcut: class defining unit tests for keyboard shortcut resolution --
+class TestShortcuts:
+    # create_dest: return a Destination class with the provided key and shortcut
+    def create_dest(self, key: str, shortcut: str| None = None) -> Destination:
+        return Destination(key=key, path='tmp', shortcut=shortcut)
+    
+    # test_first_letters_when_unique: tests that shortcut resolves to first letter of each destination when unique
+    def test_first_letters_when_unique(self) -> None:
+        out = resolve_shortcuts([self.create_dest('Keep'), self.create_dest('Bin'), self.create_dest('Archive')])
+        assert out == {0: "k", 1: "b", 2: "a"}
+
+    # test_falls_back_to_next_free_letter: test that shortcut resolves to the next available letter if the first letter is taken
+    def test_falls_back_to_next_free_letter(self) -> None:
+        out = resolve_shortcuts([self.create_dest(key='Keep'), self.create_dest(key='Kittens')])
+        assert out[0] == 'k'
+        assert out[1] != 'k'  # 'i', 't', etc.
+
+    # test_custom_shortcut: test that custom shortcuts are always used over auto-resolved shortcuts
+    def test_custom_shortcut_wins(self) -> None:
+        out = resolve_shortcuts([self.create_dest('Keep', shortcut='z'), self.create_dest('Zebra')])
+        assert out[0] == 'z'
+        assert out[1] != 'z'
