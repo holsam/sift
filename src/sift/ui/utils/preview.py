@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 # -- Import internal classes --
-from sift.ui.media_controls import MediaControls
+from sift.ui.utils.media_controls import MediaControls
 
 # -- Define filetype extensions --
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"}

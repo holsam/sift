@@ -24,7 +24,7 @@ from sift.mover import move_file, undo_move
 from sift.scanner import scan
 
 # -- Import internal UI components --
-from sift.ui.preview import PreviewWidget
+from sift.ui.utils.preview import PreviewWidget
 
 # -- human_size: convert a file size into a human-readable string --
 def human_size(num: int) -> str:
