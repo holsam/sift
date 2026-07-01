@@ -25,8 +25,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-# -- Import internal configuration classes --
+# -- Import internal classes --
 from sift.config import AppConfig, Destination, Filters
+from sift.ui.utils.toggle import ToggleSwitch
 
 # -- Import internal scanner function --
 from sift.scanner import scan
@@ -50,9 +51,14 @@ class SetupTab(QWidget):
         row = QHBoxLayout(box)
         # LHS: source selection
         left = QVBoxLayout()
-        self.recursive_check = QCheckBox('Search directories recursively')
+        recursive_row = QHBoxLayout()
+        self.recursive_check = ToggleSwitch()
         self.recursive_check.setChecked(self.config.recursive)
         self.recursive_check.toggled.connect(self._on_recursive_toggled)
+        recursive_row.addWidget(QLabel('Search directories recursively'))
+        recursive_row.addWidget(self.recursive_check)
+        recursive_row.addStretch(1)
+        left.addLayout(recursive_row)
         btn_dir = QPushButton('Add directory...')
         btn_dir.clicked.connect(self._pick_directory)
         btn_files = QPushButton('Add files...')
@@ -60,7 +66,6 @@ class SetupTab(QWidget):
         btn_clear = QPushButton('Clear sources')
         btn_clear.clicked.connect(self._clear_sources)
         self.source_list = QListWidget()
-        left.addWidget(self.recursive_check)
         left.addWidget(btn_dir)
         left.addWidget(btn_files)
         left.addWidget(btn_clear)
