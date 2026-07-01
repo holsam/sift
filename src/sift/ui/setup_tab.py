@@ -29,8 +29,10 @@ from PySide6.QtWidgets import (
 from sift.config import AppConfig, Destination, Filters
 from sift.ui.utils.toggle import ToggleSwitch
 
-# -- Import internal scanner function --
+# -- Import internal functions --
 from sift.scanner import scan
+from sift.mover import paths_overlap
+from sift.ui.utils.dialogs import pick_directories
 
 # -- SetupTab: class to define the structure of the setup tab panels --
 class SetupTab(QWidget):
@@ -182,10 +184,15 @@ class SetupTab(QWidget):
 
     # _pick_directory: allow user to select a directory
     def _pick_directory(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, 'Choose a directory')
-        if path:
+        paths = pick_directories(self, 'Choose directories')
+        added = False
+        for path in paths:
+            if self._reject_if_overlaps_destinations(path):
+                continue
             self.config.source_paths.append(path)
             self.source_list.addItem(path)
+            added = True
+        if added:
             self._persist()
             self._refresh_count()
 
@@ -258,14 +265,18 @@ class SetupTab(QWidget):
 
     # _add_destination: add a destination to the destinations table
     def _add_destination(self) -> None:
-        path = QFileDialog.getExistingDirectory(self, 'Choose a destination')
-        if not path:
-            return
-        key = Path(path).name or path
+        paths = pick_directories(self, 'Choose destination directories')
+        added = False
         self.table.blockSignals(True)
-        self._append_row(key, path)
+        for path in paths:
+            if self._reject_if_overlaps_sources(path):
+                continue
+            key = Path(path).name or path
+            self._append_row(Destination(key=key, path=path))
+            added = True
         self.table.blockSignals(False)
-        self._sync_destinations_from_table()
+        if added:
+            self._sync_destinations_from_table()
 
     # _remove_destination: remove a destination from the destinations table
     def _remove_destination(self) -> None:
@@ -292,3 +303,21 @@ class SetupTab(QWidget):
                 dests.append(Destination(key=key, path=path))
         self.config.destinations = dests
         self._persist()
+
+    # _reject_if_overlaps_sources: if a destination directory overlaps with a source directory, reject input
+    def _reject_if_overlaps_sources(self, dest_path: str) -> bool:
+        target = Path(dest_path)
+        for src in self.config.source_paths:
+            if paths_overlap(target, Path(src)):
+                QMessageBox.warning(self, 'Overlapping path', f'{dest_path} overlaps a source path and was skipped')
+                return True
+        return False
+
+    # _reject_if_overlaps_destinations: if a source directory overlaps with a destination directory, reject input
+    def _reject_if_overlaps_destinations(self, src_path: str) -> bool:
+        target = Path(src_path)
+        for dest in self.config.destinations:
+            if paths_overlap(target, Path(dest.path)):
+                QMessageBox.warning(self, 'Overlapping path', f'{src_path} overlaps a destination and was skipped')
+                return True
+        return False
