@@ -35,3 +35,25 @@ def undo_move(final: Path, original: Path) -> Path:
         target = unique_target(original.parent, original.name)
     shutil.move(str(final), str(target))
     return target
+
+# -- paths_overlap: return boolean if two paths are the same or one contains the other --
+def paths_overlap(a: Path, b: Path) -> bool:
+    a = a.resolve()
+    b = b.resolve()
+    return a == b or a in b.parents or b in a.parents
+
+# -- delete_to_session_trash: moves file src to a session 'trash' directory, returning the new path --
+def delete_to_session_trash(src: Path, trash_dir: Path) -> Path:
+    return move_file(src, trash_dir)
+
+# -- flush_session: move everything in session 'trash' directory to the OS trash --
+def flush_session_trash(trash_dir: Path) -> None:
+    if not trash_dir.exists():
+        return
+    from send2trash import send2trash
+    for child in trash_dir.iterdir():
+        send2trash(str(child))
+    try:
+        trash_dir.rmdir()
+    except OSError:
+        pass
