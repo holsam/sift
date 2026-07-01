@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QDate, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QColorDialog,
     QDateEdit,
     QFileDialog,
     QFormLayout,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QTableWidget,
@@ -141,19 +143,20 @@ class SetupTab(QWidget):
         controls.addWidget(btn_remove)
         controls.addStretch(1)
         layout.addLayout(controls)
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels(['Key', 'Path'])
-        self.table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch
-        )
-        self.table.setSelectionBehavior(
-            QAbstractItemView.SelectionBehavior.SelectRows
-        )
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(['Key', 'Path', 'Shortcut', 'Colour'])
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.itemChanged.connect(self._on_table_edited)
+        self.table.cellDoubleClicked.connect(self._on_cell_double_clicked)
         layout.addWidget(self.table)
+        hint = QLabel('Leave Shortcut blank to auto-assign. Double-click a Colour cell to select a colour for terminal output.')
+        hint.setStyleSheet('color: #888;')
+        layout.addWidget(hint)
         return box
 
     # _load_from_config: load setup tab from configuration file
@@ -174,7 +177,7 @@ class SetupTab(QWidget):
             self.source_list.addItem(src)
         self.table.blockSignals(True)
         for dest in self.config.destinations:
-            self._append_row(dest.key, dest.path)
+            self._append_row(dest)
         self.table.blockSignals(False)
 
     # _persist: save setup tab to configuration file
@@ -257,11 +260,17 @@ class SetupTab(QWidget):
         self.count_label.setText(f'Files matched: {len(files)}')
 
     # _append_row: add a row to the destinations table
-    def _append_row(self, key: str, path: str) -> None:
+    def _append_row(self, dest: Destination) -> None:
+        from PySide6.QtGui import QColor
         r = self.table.rowCount()
         self.table.insertRow(r)
-        self.table.setItem(r, 0, QTableWidgetItem(key))
-        self.table.setItem(r, 1, QTableWidgetItem(path))
+        self.table.setItem(r, 0, QTableWidgetItem(dest.key))
+        self.table.setItem(r, 1, QTableWidgetItem(dest.path))
+        self.table.setItem(r, 2, QTableWidgetItem(dest.shortcut or ''))
+        colour_item = QTableWidgetItem(dest.colour or '')
+        if dest.colour:
+            colour_item.setBackground(QColor(dest.colour))
+        self.table.setItem(r, 3, colour_item)
 
     # _add_destination: add a destination to the destinations table
     def _add_destination(self) -> None:
@@ -277,6 +286,19 @@ class SetupTab(QWidget):
         self.table.blockSignals(False)
         if added:
             self._sync_destinations_from_table()
+
+    # _on_cell_double_clicked: if a cell is double clicked and it's a Colour cell, select a colour
+    def _on_cell_double_clicked(self, row: int, column: int) -> None:
+        from PySide6.QtGui import QColor
+        if column != 3:
+            return
+        chosen = QColorDialog.getColor(parent=self, title='Destination directory colour')
+        if not chosen.isValid():
+            return
+        item = self.table.item(row, 3) or QTableWidgetItem()
+        item.setText(chosen.name())
+        item.setBackground(QColor(chosen.name()))
+        self.table.setItem(row, 3, item)   # triggers itemChanged -> sync
 
     # _remove_destination: remove a destination from the destinations table
     def _remove_destination(self) -> None:
@@ -297,10 +319,16 @@ class SetupTab(QWidget):
         for r in range(self.table.rowCount()):
             key_item = self.table.item(r, 0)
             path_item = self.table.item(r, 1)
+            sc_item = self.table.item(r, 2)
+            col_item = self.table.item(r, 3)
             key = key_item.text().strip() if key_item else ''
             path = path_item.text().strip() if path_item else ''
+            shortcut = (sc_item.text().strip()[:1].lower() if sc_item else '') or None
+            colour = (col_item.text().strip() if col_item else '') or None
             if key and path:
-                dests.append(Destination(key=key, path=path))
+                dests.append(
+                    Destination(key=key, path=path, shortcut=shortcut, colour=colour)
+                )
         self.config.destinations = dests
         self._persist()
 
