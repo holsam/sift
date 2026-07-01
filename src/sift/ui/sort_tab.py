@@ -15,12 +15,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-# -- Import internal classes --
+# -- Import internal classes and variables --
 from sift.config import AppConfig
-from sift.session import MoveRecord, Session
+from sift.session import DELETED_KEY, MoveRecord, Session
 
 # -- Import internal functions --
-from sift.mover import flush_session_trash, move_file, undo_move
+from sift.mover import delete_to_session_trash, flush_session_trash, move_file, undo_move
 from sift.scanner import scan
 
 # -- Import internal UI components --
@@ -88,11 +88,15 @@ class SortTab(QWidget):
         self.undo_btn = QPushButton('Undo')
         self.undo_btn.clicked.connect(self.undo_last)
         self.undo_btn.setEnabled(False)
+        self.delete_btn = QPushButton('Delete')
+        self.delete_btn.clicked.connect(self.delete_current)
         action_row.addWidget(self.skip_btn)
         action_row.addWidget(self.undo_btn)
+        action_row.addWidget(self.delete_btn)
         layout.addLayout(action_row)
         self._session_widgets.append(self.skip_btn)
         self._session_widgets.append(self.undo_btn)
+        self._session_widgets.append(self.delete_btn)
         # Set up session history panel
         console_box = QGroupBox('Session History')
         cl = QVBoxLayout(console_box)
@@ -179,6 +183,19 @@ class SortTab(QWidget):
         if not self.session:
             return
         self.session.skip()
+        self._refresh()
+
+    # delete_current: moves the current file to the session trash directory (for deleting at session end)
+    def delete_current(self) -> None:
+        if not self.session:
+            return
+        current = self.session.current()
+        if current is None:
+            return
+        final = delete_to_session_trash(current, self.session.trash_dir)
+        self.session.record_delete(
+            MoveRecord(original=current, final=final, key=DELETED_KEY)
+        )
         self._refresh()
 
     # undo_last: undo last file move
