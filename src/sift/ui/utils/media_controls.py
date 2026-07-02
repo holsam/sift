@@ -105,7 +105,7 @@ class MediaControls(QWidget):
         self.volume.setValue(int(self._volume * 100))
         self.volume.setFixedWidth(110)
         self.volume.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.volume.valueChanged.connext(self._on_volume_slider)
+        self.volume.valueChanged.connect(self._on_volume_slider)
         # Add media controls to layout
         row.addWidget(self.play_btn)
         row.addWidget(self.position, stretch=1)
