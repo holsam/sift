@@ -5,7 +5,7 @@ Sift UI: preview panel
 # -- Import external dependencies --
 from pathlib import Path
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QMovie, QPixmap
+from PySide6.QtGui import QKeyEvent, QMovie, QPixmap
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtPdf import QPdfDocument
@@ -20,15 +20,14 @@ from PySide6.QtWidgets import (
 )
 
 # -- Import internal classes --
-from sift.ui.utils.media_controls import MediaControls
+from sift.ui.utils.media_controls import MediaControls, SEEK_BASE_MS, VOLUME_STEP
 
 # -- Define filetype extensions --
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff"}
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm"}
 AUDIO_EXTS = {".mp3", ".wav", ".flac", ".ogg", ".m4a", ".aac"}
 TEXT_EXTS = {
-    ".txt", ".md", ".py", ".js", ".ts", ".json", ".csv", ".tsv", ".log",
-    ".html", ".css", ".yaml", ".yml", ".xml", ".ini", ".cfg", ".sh", ".gd",
+    ".txt", ".md", ".py", ".js", ".ts", ".json", ".csv", ".tsv", ".log", ".html", ".css", ".yaml", ".yml", ".xml", ".ini", ".cfg", ".sh", ".gd",
 }
 
 # -- Define character limit for reading text --
@@ -42,6 +41,8 @@ class PreviewWidget(QWidget):
         self._layout = QVBoxLayout(self)
         self._player: QMediaPlayer | None = None
         self._audio: QAudioOutput | None = None
+        self._controls: MediaControls | None = None
+        self._seek_repeats = 0
         self.show_message('Nothing to preview')
 
     # show_file: shows a file in the preview panel
@@ -74,6 +75,30 @@ class PreviewWidget(QWidget):
         self._clear()
         label = QLabel(text, alignment=Qt.AlignmentFlag.AlignCenter)
         self._layout.addWidget(label)
+
+    def handle_media_key(self, event: QKeyEvent) -> bool:
+        if self._controls is None:
+            return False
+        key = event.key()
+        if key == Qt.Key.Key_Space:
+            self._controls.toggle()
+            return True
+        if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+            self._seek_repeats = self._seek_repeats + 1 if event.isAutoRepeat() else 0
+            step = SEEK_BASE_MS * (1 + self._seek_repeats // 4)  # hold to go faster
+            self._controls.seek_relative(-step if key == Qt.Key.Key_Left else step)
+            return True
+        if key == Qt.Key.Key_Up:
+            self._controls.change_volume(VOLUME_STEP)
+            return True
+        if key == Qt.Key.Key_Down:
+            self._controls.change_volume(-VOLUME_STEP)
+            return True
+        return False
+
+    def handle_media_key_release(self, event: QKeyEvent) -> None:
+        if event.key() in (Qt.Key.Key_Left, Qt.Key.Key_Right) and not event.isAutoRepeat():
+            self._seek_repeats = 0
 
     # _show_image: displays an image (or movie if GIF)
     def _show_image(self, path: Path) -> None:
@@ -109,6 +134,7 @@ class PreviewWidget(QWidget):
             )
         self._player.setSource(QUrl.fromLocalFile(str(path)))
         self._layout.addWidget(MediaControls(self._player, self._audio))
+        self._player.play()
 
     # _show_pdf: displays a PDF file
     def _show_pdf(self, path: Path) -> None:
@@ -154,6 +180,7 @@ class PreviewWidget(QWidget):
             self._player.setVideoOutput(None)
             self._player = None
             self._audio = None
+            self._controls = None
 
 # -- _read_text: reads a text file to a string -- 
 def _read_text(path: Path) -> str:
