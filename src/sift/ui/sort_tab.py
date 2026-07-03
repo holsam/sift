@@ -2,6 +2,7 @@
 Sift UI: sort tab
 '''
 # -- Import external dependencies --
+import html
 from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeyEvent
@@ -10,7 +11,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
-    QPlainTextEdit,
+    QTextEdit,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -103,7 +104,7 @@ class SortTab(QWidget):
         # Set up session history panel
         console_box = QGroupBox('Session History')
         cl = QVBoxLayout(console_box)
-        self.console = QPlainTextEdit()
+        self.console = QTextEdit()
         self.console.setReadOnly(True)
         cl.addWidget(self.console)
         layout.addWidget(console_box, stretch=1)
@@ -235,7 +236,21 @@ class SortTab(QWidget):
             return
         self.summary_label.setText(f'Sorted {self.session.sorted_count} of {self.session.total} ({self.session.remaining} left)')
         self.undo_btn.setEnabled(self.session is not None and self.session.last_move is not None)
-        self.console.setPlainText('\n'.join(self.session.history))
+        lines = []
+        for entry in self.session.history:
+            body = html.escape(entry.body)
+            if entry.key:
+                colour = entry.colour or "#888888"
+                key = (
+                    f'<span style="color:{colour}; font-weight:600">'
+                    f"{html.escape(entry.key)}</span>"
+                )
+            else:
+                key = ""
+            lines.append(
+                f'<span style="color:#888888">[{entry.stamp}]</span> {body}{key}'
+            )
+        self.console.setHtml("<br>".join(lines))
         self.console.verticalScrollBar().setValue(
             self.console.verticalScrollBar().maximum()
         )
