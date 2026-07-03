@@ -5,7 +5,7 @@ Sift UI: setup tab
 # -- Import external dependencies --
 from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import QDate, Signal
+from PySide6.QtCore import QDate, QSize, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QColorDialog,
@@ -35,6 +35,7 @@ from sift.ui.utils.toggle import ToggleSwitch
 from sift.scanner import scan
 from sift.mover import paths_overlap
 from sift.ui.utils.dialogs import pick_directories
+from sift.ui.utils.icons import icon
 
 # -- SetupTab: class to define the structure of the setup tab panels --
 class SetupTab(QWidget):
@@ -50,12 +51,24 @@ class SetupTab(QWidget):
         self._refresh_count()
 
     # _build_upper_panel: construct the upper panel of setup tab (source selection and filtering)
-    def _build_upper_panel(self) -> QWidget:
-        box = QGroupBox('Source Files and Filters')
-        row = QHBoxLayout(box)
-        # LHS: source selection
-        left = QVBoxLayout()
-        recursive_row = QHBoxLayout()
+        btn_dir = QPushButton()
+        btn_dir.setIcon(icon('add_folder', self))
+        btn_dir.setToolTip('Add directory')
+        btn_dir.clicked.connect(self._pick_directory)
+        btn_files = QPushButton()
+        btn_files.setIcon(icon('add_file', self))
+        btn_files.setToolTip('Add files')
+        btn_files.clicked.connect(self._pick_files)
+        btn_clear = QPushButton()
+        btn_clear.setIcon(icon('clear_list', self))
+        btn_clear.setToolTip('Clear sources')
+        btn_clear.clicked.connect(self._clear_sources)
+        for b in (btn_dir, btn_files, btn_clear):
+            b.setIconSize(QSize(20, 20))
+        src_tools_row = QHBoxLayout()
+        src_tools_row.addWidget(btn_dir)
+        src_tools_row.addWidget(btn_files)
+        src_tools_row.addWidget(btn_clear)
         self.recursive_check = ToggleSwitch()
         self.recursive_check.setChecked(self.config.recursive)
         self.recursive_check.toggled.connect(self._on_recursive_toggled)
@@ -70,13 +83,7 @@ class SetupTab(QWidget):
         btn_clear = QPushButton('Clear sources')
         btn_clear.clicked.connect(self._clear_sources)
         self.source_list = QListWidget()
-        left.addWidget(btn_dir)
-        left.addWidget(btn_files)
-        left.addWidget(btn_clear)
-        left.addWidget(QLabel('Selected sources:'))
-        left.addWidget(self.source_list, stretch=1)
-        # RHS: filters
-        right = QVBoxLayout()
+        layout.addLayout(src_tools_row)
         form = QFormLayout()
         # Add file extenstion filters
         self.ext_input = QLineEdit()
