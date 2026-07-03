@@ -89,29 +89,29 @@ class SetupTab(QWidget):
         self.ext_input = QLineEdit()
         self.ext_input.setPlaceholderText('jpg, png, mp4')
         self.ext_input.editingFinished.connect(self._on_filter_changed)
-        form.addRow('Filter for file extensions (blank = all):', self.ext_input)
+        form.addRow('Filter for file extensions (blank = all):', self._row_with_clear(self.ext_input, 'Clear filter', self._clear_ext))
         # Add file name glob filters
         self.glob_input = QLineEdit()
         self.glob_input.setPlaceholderText('*pattern*')
         self.glob_input.editingFinished.connect(self._on_filter_changed)
-        form.addRow('Filter for file names matching glob:', self.glob_input)
+        form.addRow('Filter for file names matching glob:', self._row_with_clear(self.glob_input, 'Clear filter', self._clear_glob))
         # Add file name glob filters
         self.regex_input = QLineEdit()
         self.regex_input.setPlaceholderText(r"\d{4}-\d{2}-\d{2}")
         self.regex_input.editingFinished.connect(self._on_filter_changed)
-        form.addRow('Filters for files matching regex:', self.regex_input)
+        form.addRow('Filters for files matching regex:', self._row_with_clear(self.regex_input, 'Clear filter', self._clear_regex))
         # Add size filters
         self.min_size = QSpinBox()
         self.min_size.setRange(0, 1_000_000)
         self.min_size.setSuffix(' MB')
         self.min_size.valueChanged.connect(self._on_filter_changed)
-        form.addRow('Filter for minimum file size:', self.min_size)
+        form.addRow('Filter for minimum file size:', self._row_with_clear(self.min_size, 'Clear filter', self._clear_min_size))
         self.max_size = QSpinBox()
         self.max_size.setRange(0, 1_000_000)   # 0 = no maximum
         self.max_size.setSuffix(' MB')
         self.max_size.setSpecialValueText('none')
         self.max_size.valueChanged.connect(self._on_filter_changed)
-        form.addRow('Filter for maximum file size:', self.max_size)
+        form.addRow('Filter for maximum file size:', self._row_with_clear(self.max_size, 'Clear filter', self._clear_max_size))
         # Add date filters
         self.date_before = QDateEdit()
         self.date_before.setCalendarPopup(True)
@@ -119,14 +119,14 @@ class SetupTab(QWidget):
         self.date_before.setMinimumDate(QDate(2000, 1, 1))
         self.date_before.setDate(self.date_before.minimumDate())
         self.date_before.dateChanged.connect(self._on_filter_changed)
-        form.addRow('Filter for files modified before:', self.date_before)
+        form.addRow('Filter for files modified before:', self._row_with_clear(self.date_before, 'Clear filter', self._clear_date_before))
         self.date_after = QDateEdit()
         self.date_after.setCalendarPopup(True)
         self.date_after.setSpecialValueText('none')
         self.date_after.setMinimumDate(QDate(2000, 1, 1))
         self.date_after.setDate(self.date_after.minimumDate())
         self.date_after.dateChanged.connect(self._on_filter_changed)
-        form.addRow('Filter for files modified after:', self.date_after)
+        form.addRow('Filter for files modified after:', self._row_with_clear(self.date_after, 'Clear filter', self._clear_date_after))
         # Add form of filters to RHS and add count
         right.addLayout(form)
         self.count_label = QLabel('Files matched: 0')
@@ -234,6 +234,52 @@ class SetupTab(QWidget):
         self.config.recursive = checked
         self._persist()
         self._refresh_count()
+
+    # _row_with_clear: wrap a filter widget with a small clear button and return as a single widget
+    def _row_with_clear(self, field: QWidget, tooltip: str, on_clear) -> QWidget:
+        container = QWidget()
+        row = QHBoxLayout(container)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(field, stretch=1)
+        clear_btn = QPushButton()
+        clear_btn.setIcon(icon('clear_filter', self))
+        clear_btn.setIconSize(QSize(14, 14))
+        clear_btn.setFixedWidth(26)
+        clear_btn.setToolTip(tooltip)
+        clear_btn.clicked.connect(on_clear)
+        row.addWidget(clear_btn)
+        return container
+
+    # _clear_ext: clear extension filter
+    def _clear_ext(self) -> None:
+        self.ext_input.clear()
+        self._on_filter_changed()
+
+    # _clear_glob: clear glob filter
+    def _clear_glob(self) -> None:
+        self.glob_input.clear()
+        self._on_filter_changed()
+
+    # _clear_regex: clear regex filter
+    def _clear_regex(self) -> None:
+        self.regex_input.clear()
+        self._on_filter_changed()
+
+    # _clear_min_size: clear minimum size filter
+    def _clear_min_size(self) -> None:
+        self.min_size.setValue(0)
+
+    # _clear_max_size: clear maximum size filter
+    def _clear_max_size(self) -> None:
+        self.max_size.setValue(0)
+
+    # _clear_date_after: clear modified-after filter
+    def _clear_date_after(self) -> None:
+        self.date_after.setDate(self.date_after.minimumDate())
+
+    # _clear_date_before: clear modified-before filter
+    def _clear_date_before(self) -> None:
+        self.date_before.setDate(self.date_before.minimumDate())
 
     # _on_filter_changed: apply filter logic
     def _on_filter_changed(self) -> None:
