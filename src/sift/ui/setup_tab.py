@@ -44,13 +44,19 @@ class SetupTab(QWidget):
     def __init__(self, config: AppConfig) -> None:
         super().__init__()
         self.config = config
-        root = QVBoxLayout(self)
-        root.addWidget(self._build_upper_panel(), stretch=1)
-        root.addWidget(self._build_lower_panel(), stretch=1)
+        layout = QVBoxLayout(self)
+        upper_panel = QHBoxLayout()
+        upper_panel.addWidget(self._build_sources_panel(), stretch=1)
+        upper_panel.addWidget(self._build_filters_panel(), stretch=1)
+        layout.addLayout(upper_panel)
+        layout.addWidget(self._build_lower_panel(), stretch=1)
         self._load_from_config()
         self._refresh_count()
 
     # _build_upper_panel: construct the upper panel of setup tab (source selection and filtering)
+    def _build_sources_panel(self) -> QWidget:
+        box = QGroupBox('Source Files')
+        layout = QVBoxLayout(box)
         btn_dir = QPushButton()
         btn_dir.setIcon(icon('add_folder', self))
         btn_dir.setToolTip('Add directory')
@@ -72,18 +78,19 @@ class SetupTab(QWidget):
         self.recursive_check = ToggleSwitch()
         self.recursive_check.setChecked(self.config.recursive)
         self.recursive_check.toggled.connect(self._on_recursive_toggled)
-        recursive_row.addWidget(QLabel('Search directories recursively'))
-        recursive_row.addWidget(self.recursive_check)
-        recursive_row.addStretch(1)
-        left.addLayout(recursive_row)
-        btn_dir = QPushButton('Add directory...')
-        btn_dir.clicked.connect(self._pick_directory)
-        btn_files = QPushButton('Add files...')
-        btn_files.clicked.connect(self._pick_files)
-        btn_clear = QPushButton('Clear sources')
-        btn_clear.clicked.connect(self._clear_sources)
+        src_tools_row.addStretch(1)
+        src_tools_row.addWidget(QLabel('Search directories recursively'))
+        src_tools_row.addWidget(self.recursive_check)
         self.source_list = QListWidget()
         layout.addLayout(src_tools_row)
+        layout.addWidget(QLabel('Selected sources:'))
+        layout.addWidget(self.source_list, stretch=1)
+        return box
+
+# _build_upper_panel: construct the upper panel of setup tab (source selection and filtering)
+    def _build_filters_panel(self) -> QWidget:
+        box = QGroupBox('Filters')
+        layout = QVBoxLayout(box)
         form = QFormLayout()
         # Add file extenstion filters
         self.ext_input = QLineEdit()
@@ -128,13 +135,10 @@ class SetupTab(QWidget):
         self.date_after.dateChanged.connect(self._on_filter_changed)
         form.addRow('Filter for files modified after:', self._row_with_clear(self.date_after, 'Clear filter', self._clear_date_after))
         # Add form of filters to RHS and add count
-        right.addLayout(form)
+        layout.addLayout(form)
         self.count_label = QLabel('Files matched: 0')
         self.count_label.setStyleSheet('font-size: 18px; font-weight: 600;')
-        right.addWidget(self.count_label)
-        right.addStretch(1)
-        row.addLayout(left, stretch=1)
-        row.addLayout(right, stretch=1)
+        layout.addWidget(self.count_label)
         return box
 
     # _build_lower_panel: construct the upper panel of setup tab (source selection and filtering)
