@@ -39,20 +39,12 @@ def _passes(path: Path, filters: Filters, exts: set[str]) -> bool:
             return False
     return True
 
-# -- scan: collects files from sources and filters to return a list of Paths --
-def scan(
-    sources: list[Path],
-    recursive: bool = True,
-    filters: Filters | None = None,
-) -> list[Path]:
-    filters = filters or Filters()
-    exts = filters.normalised()
+# -- walk_files: collects every resolved file path from sources, deduplicated, unfiltered --
+def walk_files(sources: list[Path], recursive: bool = True) -> list[Path]:
     seen: set[Path] = set()
     out: list[Path] = []
     def consider(p: Path) -> None:
         if not p.is_file():
-            return
-        if not _passes(p, filters, exts):
             return
         resolved = p.resolve()
         if resolved in seen:
@@ -67,3 +59,17 @@ def scan(
             for child in walker:
                 consider(child)
     return out
+
+# -- filter_files: apply filters to an already-collected list of files, in memory --
+def filter_files(files: list[Path], filters: Filters | None = None) -> list[Path]:
+    filters = filters or Filters()
+    exts = filters.normalised()
+    return [p for p in files if _passes(p, filters, exts)]
+
+# -- scan: collects files from sources and filters to return a list of Paths --
+def scan(
+    sources: list[Path],
+    recursive: bool = True,
+    filters: Filters | None = None,
+) -> list[Path]:
+    return filter_files(walk_files(sources, recursive), filters)
