@@ -32,7 +32,7 @@ from sift.config import AppConfig, Destination, Filters
 from sift.ui.utils.toggle import ToggleSwitch
 
 # -- Import internal functions --
-from sift.scanner import scan
+from sift.scanner import filter_files, walk_files
 from sift.mover import paths_overlap
 from sift.ui.utils.dialogs import pick_directories
 from sift.ui.utils.icons import icon
@@ -46,8 +46,11 @@ class SetupTab(QWidget):
         self.config = config
         layout = QVBoxLayout(self)
         upper_panel = QHBoxLayout()
+        file_panels = QVBoxLayout()
+        file_panels.addWidget(self._build_filters_panel(), stretch=1)
+        file_panels.addWidget(self._build_count_panel(), stretch=1)
         upper_panel.addWidget(self._build_sources_panel(), stretch=1)
-        upper_panel.addWidget(self._build_filters_panel(), stretch=1)
+        upper_panel.addLayout(file_panels)
         layout.addLayout(upper_panel)
         layout.addWidget(self._build_lower_panel(), stretch=1)
         self._load_from_config()
@@ -134,11 +137,21 @@ class SetupTab(QWidget):
         self.date_after.setDate(self.date_after.minimumDate())
         self.date_after.dateChanged.connect(self._on_filter_changed)
         form.addRow('Filter for files modified after:', self._row_with_clear(self.date_after, 'Clear filter', self._clear_date_after))
-        # Add form of filters to RHS and add count
+        # Add form of filters to RHS
         layout.addLayout(form)
-        self.count_label = QLabel('Files matched: 0')
-        self.count_label.setStyleSheet('font-size: 18px; font-weight: 600;')
-        layout.addWidget(self.count_label)
+        return box
+
+    # _build_count_panel: construct the file-count panel (total vs matching)
+    def _build_count_panel(self) -> QWidget:
+        box = QGroupBox('File Counts')
+        layout = QHBoxLayout(box)
+        self.total_label = QLabel('Total files: 0')
+        self.match_label = QLabel('Matching files: 0')
+        for lbl in (self.total_label, self.match_label):
+            lbl.setStyleSheet('font-size: 18px; font-weight: 600;')
+        layout.addWidget(self.total_label)
+        layout.addStretch(1)
+        layout.addWidget(self.match_label)
         return box
 
     # _build_lower_panel: construct the upper panel of setup tab (source selection and filtering)
@@ -313,14 +326,13 @@ class SetupTab(QWidget):
         self._persist()
         self._refresh_count()
 
-    # _refresh_count: refresh file count
+    # _refresh_count: refresh file counts (total unfiltered vs matching current filters)
     def _refresh_count(self) -> None:
-        files = scan(
-            [Path(p) for p in self.config.source_paths],
-            recursive=self.config.recursive,
-            filters=self.config.filters,
-        )
-        self.count_label.setText(f'Files matched: {len(files)}')
+        sources = [Path(p) for p in self.config.source_paths]
+        all_files = walk_files(sources, recursive=self.config.recursive)
+        matching = filter_files(all_files, self.config.filters)
+        self.total_label.setText(f'Total files: {len(all_files)}')
+        self.match_label.setText(f'Matching files: {len(matching)}')
 
     # _append_row: add a row to the destinations table
     def _append_row(self, dest: Destination) -> None:
