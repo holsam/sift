@@ -5,7 +5,7 @@ Sift UI: setup tab
 # -- Import external dependencies --
 from datetime import datetime
 from pathlib import Path
-from PySide6.QtCore import QDate, QSize, Signal
+from PySide6.QtCore import QDate, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QColorDialog,
@@ -345,9 +345,11 @@ class SetupTab(QWidget):
         self.table.setItem(r, 0, QTableWidgetItem(dest.key))
         self.table.setItem(r, 1, QTableWidgetItem(dest.path))
         self.table.setItem(r, 2, QTableWidgetItem(dest.shortcut or ''))
-        colour_item = QTableWidgetItem(dest.colour or '')
+        colour_item = QTableWidgetItem()
+        colour_item.setFlags(colour_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         if dest.colour:
             colour_item.setBackground(QColor(dest.colour))
+            colour_item.setData(Qt.ItemDataRole.UserRole, dest.colour)
         self.table.setItem(r, 3, colour_item)
 
     # _add_destination: add a destination to the destinations table
@@ -374,8 +376,9 @@ class SetupTab(QWidget):
         if not chosen.isValid():
             return
         item = self.table.item(row, 3) or QTableWidgetItem()
-        item.setText(chosen.name())
+        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
         item.setBackground(QColor(chosen.name()))
+        item.setData(Qt.ItemDataRole.UserRole, chosen.name())
         self.table.setItem(row, 3, item)   # triggers itemChanged -> sync
 
     # _remove_destination: remove a destination from the destinations table
@@ -402,7 +405,7 @@ class SetupTab(QWidget):
             key = key_item.text().strip() if key_item else ''
             path = path_item.text().strip() if path_item else ''
             shortcut = (sc_item.text().strip()[:1].lower() if sc_item else '') or None
-            colour = (col_item.text().strip() if col_item else '') or None
+            colour = col_item.data(Qt.ItemDataRole.UserRole) if col_item else None
             if key and path:
                 dests.append(
                     Destination(key=key, path=path, shortcut=shortcut, colour=colour)
