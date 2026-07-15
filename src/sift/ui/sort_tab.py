@@ -197,7 +197,7 @@ class SortTab(QWidget):
         original = current
         final = move_file(current, Path(dest.path))
         self.session.record_move(
-            MoveRecord(original=original, final=final, key=dest.key)
+            MoveRecord(original=original, final=final, key=dest.key, colour=dest.colour)
         )
         self._refresh()
 
